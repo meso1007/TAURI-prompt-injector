@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  /* 必要ならここにカスタム設定 */
+}
+
+/* Tauri用のスクロールバー消し & 初期化 */
+body, #root {
+  @apply h-screen w-full overflow-hidden bg-transparent m-0 p-0;
+  /* ユーザー選択を無効化（アプリっぽくする） */
+  user-select: none;
+}
