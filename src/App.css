@@ -9,4 +9,22 @@ body, #root {
   @apply h-screen w-full overflow-hidden bg-transparent m-0 p-0;
   /* ユーザー選択を無効化（アプリっぽくする） */
   user-select: none;
+  background-color: transparent !important;
+  height: 100%;
+  overflow: hidden; /* スクロールバーを出さない */
+}
+:root {
+  /* デフォルトのアクセントカラー (青) */
+  --accent-color: #2F7AF6;
+}
+
+/* 既存のクラスも変数を使うように修正 (Tailwindの設定でやるのが本式ですが、今回は直接CSSで上書きする簡易手法で行きます) */
+.bg-accent {
+  background-color: var(--accent-color) !important;
+}
+.text-accent {
+  color: var(--accent-color) !important;
+}
+.border-accent {
+  border-color: var(--accent-color) !important;
 }

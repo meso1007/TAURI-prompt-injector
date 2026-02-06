@@ -6,7 +6,7 @@ type Props = {
   
   export const SearchBar = ({ query, setQuery, onResetSelection }: Props) => {
     return (
-      <div className="p-3 border-b border-[#333]">
+      <div className="p-3 border-b border-[var(--border)]">
         <input
           autoFocus
           type="text"
@@ -16,7 +16,7 @@ type Props = {
             setQuery(e.target.value);
             onResetSelection();
           }}
-          className="w-full bg-transparent text-lg text-white placeholder-neutral-500 outline-none"
+          className="w-full bg-transparent text-lg text-[var(--text-main)] placeholder:text-[var(--text-sub)] outline-none"
         />
       </div>
     );

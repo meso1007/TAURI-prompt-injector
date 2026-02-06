@@ -3,6 +3,8 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 import { ask } from '@tauri-apps/plugin-dialog';
+// import { listen } from '@tauri-apps/api/event'; // ★削除: 使わなくなるので
+
 import { usePrompts } from "./hooks/usePrompts";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { executePrompt } from "./utils/action";
@@ -10,36 +12,45 @@ import { SearchBar } from "./components/SearchBar";
 import { Footer } from "./components/Footer";
 import { PromptItem } from "./components/PromptItem";
 import { PromptModal } from "./components/PromptModal";
+import { PromptDetailModal } from "./components/PromptDetailModal";
+import { SettingsModal } from "./components/SettingsModal";
+import { useSettings } from "./contexts/SettingsContext";
 import { Prompt } from "./types";
 import "./App.css";
 
 function App() {
-  const { prompts, addPrompt, updatePrompt, deletePrompt, reorderPrompts, updatePromptField } = usePrompts();  
+  const { prompts, addPrompt, updatePrompt, deletePrompt, reorderPrompts, updatePromptField } = usePrompts();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailData, setDetailData] = useState<Prompt | undefined>(undefined);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [modalData, setModalData] = useState<Prompt | undefined>(undefined);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  useSettings();
 
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useShortcuts(prompts);
 
-  const filteredPrompts = prompts.filter(p => 
-    p.title.toLowerCase().includes(query.toLowerCase()) || 
+  const filteredPrompts = prompts.filter(p =>
+    p.title.toLowerCase().includes(query.toLowerCase()) ||
     p.desc.toLowerCase().includes(query.toLowerCase())
   );
 
-  // ▼▼▼ Refで常に最新リストを保持 ▼▼▼
   const filteredPromptsRef = useRef(filteredPrompts);
   filteredPromptsRef.current = filteredPrompts;
-  
+
   const isDraggable = query === "" && !editingId && !isModalOpen;
 
   const handleSelect = async (prompt: typeof prompts[0]) => {
     await executePrompt(prompt);
+    // 実行後は自動で隠す（これは便利なので残す）
+    await getCurrentWebviewWindow().hide(); 
+    
     setTimeout(() => {
       setQuery("");
       setSelectedIndex(0);
@@ -52,21 +63,36 @@ function App() {
     setSelectedIndex(result.destination.index);
   };
 
-  // ★ キーボード操作ロジック
+  // ★★★ 修正箇所: Blur監視（自動で隠す機能）を完全に削除しました ★★★
+  // これにより、トレイアイコンやショートカット以外では閉じなくなります。
+  /* useEffect(() => {
+     ... (以前のリスナーコードは全部削除) ...
+  }, []);
+  */
+
+  // キーボード操作ロジック
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // ▼▼▼ ここが最重要修正！Refから最新リストを取得 ▼▼▼
-      const currentList = filteredPromptsRef.current; 
-      // ▲▲▲ これ以降は filteredPrompts ではなく currentList を使う
+      const currentList = filteredPromptsRef.current;
 
-      if (isModalOpen) return;
+      if (isModalOpen || isDetailOpen) {
+        if (isDetailOpen && e.key === "Escape") {
+          setIsDetailOpen(false);
+        }
+        return;
+      }
       
       if (editingId) {
         if (e.key === "Escape") setEditingId(null);
         return;
       }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        setIsSettingsOpen(true);
+        return;
+      }
 
-      // ▼ Cmd+N: 新規作成
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
         e.stopPropagation();
@@ -76,11 +102,9 @@ function App() {
         return;
       }
 
-      // ▼ Cmd+E: 編集
       if ((e.metaKey || e.ctrlKey) && e.key === "e") {
         e.preventDefault();
         e.stopPropagation();
-        // ★ currentList を使用
         const target = currentList[selectedIndex];
         if (target) {
           setModalMode("edit");
@@ -89,18 +113,25 @@ function App() {
         }
         return;
       }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+        e.preventDefault();
+        const target = currentList[selectedIndex];
+        if (target) {
+          setDetailData(target);
+          setIsDetailOpen(true);
+        }
+        return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && (e.key === "Backspace" || e.key === "Delete" || e.code === "Backspace")) {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
 
         const target = currentList[selectedIndex];
-        
+
         if (target) {
-          // ★ ask関数を使ってネイティブダイアログを表示
-          // awaitを使うために、ここだけ即時実行関数(async)にする必要がありますが、
-          // useEffect内なので .then() でつなぐのが一番簡単です。
-          
           ask(`Are you sure you want to delete "${target.title}"?`, {
             title: 'Delete Prompt',
             kind: 'warning',
@@ -110,10 +141,10 @@ function App() {
             if (confirmed) {
               deletePrompt(target.id);
               setSelectedIndex((prev) => Math.max(0, prev - 1));
-              
-              sendNotification({ 
+
+              sendNotification({
                 title: "Deleted",
-                body: `Removed prompt: "${target.title}"` 
+                body: `Removed prompt: "${target.title}"`
               });
             }
           });
@@ -121,19 +152,17 @@ function App() {
         return;
       }
 
-      // ▼ Cmd+K: キー設定
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        const target = currentList[selectedIndex]; // ★ currentList を使用
+        const target = currentList[selectedIndex];
         if (target) setEditingId(target.id);
         return;
       }
 
-      // 矢印キーなど
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex(prev => {
-          const next = Math.min(prev + 1, currentList.length - 1); // ★ currentList を使用
+          const next = Math.min(prev + 1, currentList.length - 1);
           itemRefs.current[next]?.scrollIntoView({ block: "nearest" });
           return next;
         });
@@ -147,9 +176,10 @@ function App() {
       } else if (e.key === "Enter") {
         if (e.isComposing) return;
         e.preventDefault();
-        // ★ currentList を使用
         if (currentList[selectedIndex]) handleSelect(currentList[selectedIndex]);
-      } else if (e.key === "Escape") {
+      } 
+      // ▼ Escキーで閉じる機能は残す
+      else if (e.key === "Escape") {
         if (query.length > 0) setQuery("");
         else getCurrentWebviewWindow().hide();
       }
@@ -157,62 +187,74 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
-    
-  // Refを使うので filteredPrompts は依存配列から外しても動きますが、念のため入れておいても害はありません
-  }, [deletePrompt, query, selectedIndex, isModalOpen, editingId]); // filteredPrompts削除
+
+  }, [deletePrompt, query, selectedIndex, isModalOpen, editingId, isDetailOpen, isSettingsOpen]);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#191919] text-white overflow-hidden border border-[#333]">
-      <SearchBar 
-        query={query} 
-        setQuery={setQuery} 
-        onResetSelection={() => setSelectedIndex(0)} 
-      />
+    <div className="h-screen w-full bg-transparent flex flex-col font-sans">
+      <div className="flex flex-col h-full w-full bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden rounded-xl border border-[var(--border)] shadow-2xl">
+        <SearchBar
+          query={query}
+          setQuery={setQuery}
+          onResetSelection={() => setSelectedIndex(0)}
+        />
 
-      <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="prompts-list">
-          {(provided) => (
-            <ul 
-              className="flex-1 overflow-y-auto p-2 space-y-1"
-              {...provided.droppableProps}
-              ref={provided.innerRef}
-            >
-              {filteredPrompts.map((prompt, index) => (
-                <PromptItem
-                  key={prompt.id}
-                  index={index}
-                  prompt={prompt}
-                  isSelected={index === selectedIndex}
-                  isDraggable={isDraggable}
-                  isEditing={editingId === prompt.id}
-                  setEditingId={setEditingId}
-                  onSelect={() => handleSelect(prompt)}
-                  onHover={() => setSelectedIndex(index)}
-                  onShortcutUpdate={(id, key) => updatePromptField(id, "shortcut", key)}
-                  innerRef={(el) => { itemRefs.current[index] = el; }}
-                />
-              ))}
-              {provided.placeholder}
-            </ul>
-          )}
-        </Droppable>
-      </DragDropContext>
-      
-      <PromptModal 
-        isOpen={isModalOpen}
-        mode={modalMode}
-        initialData={modalData}
-        onClose={() => setIsModalOpen(false)}
-        onSave={(data) => {
-          if (modalMode === "create") {
-            addPrompt(data);
-          } else {
-            updatePrompt(data as Prompt);
-          }
-        }}
-      />
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="prompts-list">
+            {(provided) => (
+              <ul
+                className="flex-1 overflow-y-auto p-2 space-y-1"
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+              >
+                {filteredPrompts.map((prompt, index) => (
+                  <PromptItem
+                    key={prompt.id}
+                    index={index}
+                    prompt={prompt}
+                    isSelected={index === selectedIndex}
+                    isDraggable={isDraggable}
+                    isEditing={editingId === prompt.id}
+                    setEditingId={setEditingId}
+                    onSelect={() => handleSelect(prompt)}
+                    onHover={() => setSelectedIndex(index)}
+                    onShortcutUpdate={(id, key) => updatePromptField(id, "shortcut", key)}
+                    innerRef={(el) => { itemRefs.current[index] = el; }}
+                  />
+                ))}
+                {provided.placeholder}
+              </ul>
+            )}
+          </Droppable>
+        </DragDropContext>
 
-      <Footer />
+        <PromptModal
+          isOpen={isModalOpen}
+          mode={modalMode}
+          initialData={modalData}
+          onClose={() => setIsModalOpen(false)}
+          onSave={(data) => {
+            if (modalMode === "create") {
+              addPrompt(data);
+            } else {
+              updatePrompt(data as Prompt);
+            }
+          }}
+        />
+
+        <PromptDetailModal
+          isOpen={isDetailOpen}
+          prompt={detailData}
+          onClose={() => setIsDetailOpen(false)}
+        />
+        
+        <SettingsModal
+          isOpen={isSettingsOpen} 
+          onClose={() => setIsSettingsOpen(false)}
+        />
+        
+        <Footer />
+      </div>
     </div>
   );
 }

@@ -22,6 +22,10 @@ export const usePrompts = () => {
       prev.map((p) => (p.id === updatedPrompt.id ? updatedPrompt : p))
     );
   };
+  const resetPrompts = () => {
+    localStorage.removeItem("tsuchi-prompts"); // 保存データを消す
+    setPrompts(DEFAULT_PROMPTS); // デフォルトに戻す
+  };
 
   const deletePrompt = (id: string) => {
     setPrompts((prev) => prev.filter((p) => p.id !== id));
@@ -48,5 +52,6 @@ export const usePrompts = () => {
     deletePrompt,
     reorderPrompts,
     updatePromptField,
+    resetPrompts,
   };
 };

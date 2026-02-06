@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { register, unregisterAll, isRegistered } from '@tauri-apps/plugin-global-shortcut';
+import { register, isRegistered } from '@tauri-apps/plugin-global-shortcut';
 import { Prompt } from "../types";
 import { executePrompt } from "../utils/action";
 

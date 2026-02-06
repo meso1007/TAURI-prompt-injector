@@ -10,16 +10,17 @@
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-focus",
-    "global-shortcut:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
     "global-shortcut:allow-is-registered",
     "notification:default",
     "positioner:default",
     "clipboard-manager:default",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
-    "shell:default",
-    "dialog:default"
+    "shell:allow-open",
+    "dialog:default",
+    "core:tray:default" 
   ]
 }
