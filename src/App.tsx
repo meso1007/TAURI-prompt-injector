@@ -1,20 +1,28 @@
 import { useState, useEffect, useRef } from "react";
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-
+import { sendNotification } from '@tauri-apps/plugin-notification';
+import { ask } from '@tauri-apps/plugin-dialog';
 import { usePrompts } from "./hooks/usePrompts";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { executePrompt } from "./utils/action";
 import { SearchBar } from "./components/SearchBar";
 import { Footer } from "./components/Footer";
 import { PromptItem } from "./components/PromptItem";
+import { PromptModal } from "./components/PromptModal";
+import { Prompt } from "./types";
 import "./App.css";
 
 function App() {
-  const { prompts, updatePromptShortcut, reorderPrompts } = usePrompts();
+  const { prompts, addPrompt, updatePrompt, deletePrompt, reorderPrompts, updatePromptField } = usePrompts();  
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
+  const [modalData, setModalData] = useState<Prompt | undefined>(undefined);
+
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useShortcuts(prompts);
@@ -23,8 +31,12 @@ function App() {
     p.title.toLowerCase().includes(query.toLowerCase()) || 
     p.desc.toLowerCase().includes(query.toLowerCase())
   );
+
+  // ▼▼▼ Refで常に最新リストを保持 ▼▼▼
+  const filteredPromptsRef = useRef(filteredPrompts);
+  filteredPromptsRef.current = filteredPrompts;
   
-  const isDraggable = query === "" && !editingId;
+  const isDraggable = query === "" && !editingId && !isModalOpen;
 
   const handleSelect = async (prompt: typeof prompts[0]) => {
     await executePrompt(prompt);
@@ -40,31 +52,88 @@ function App() {
     setSelectedIndex(result.destination.index);
   };
 
-  // ★ キーボード操作ロジック (ここを修正)
+  // ★ キーボード操作ロジック
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 編集中は、Esc以外の操作を PromptItem 側に任せる
+      // ▼▼▼ ここが最重要修正！Refから最新リストを取得 ▼▼▼
+      const currentList = filteredPromptsRef.current; 
+      // ▲▲▲ これ以降は filteredPrompts ではなく currentList を使う
+
+      if (isModalOpen) return;
+      
       if (editingId) {
-        if (e.key === "Escape") {
-          setEditingId(null);
+        if (e.key === "Escape") setEditingId(null);
+        return;
+      }
+
+      // ▼ Cmd+N: 新規作成
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        e.stopPropagation();
+        setModalMode("create");
+        setModalData(undefined);
+        setIsModalOpen(true);
+        return;
+      }
+
+      // ▼ Cmd+E: 編集
+      if ((e.metaKey || e.ctrlKey) && e.key === "e") {
+        e.preventDefault();
+        e.stopPropagation();
+        // ★ currentList を使用
+        const target = currentList[selectedIndex];
+        if (target) {
+          setModalMode("edit");
+          setModalData(target);
+          setIsModalOpen(true);
+        }
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === "Backspace" || e.key === "Delete" || e.code === "Backspace")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        const target = currentList[selectedIndex];
+        
+        if (target) {
+          // ★ ask関数を使ってネイティブダイアログを表示
+          // awaitを使うために、ここだけ即時実行関数(async)にする必要がありますが、
+          // useEffect内なので .then() でつなぐのが一番簡単です。
+          
+          ask(`Are you sure you want to delete "${target.title}"?`, {
+            title: 'Delete Prompt',
+            kind: 'warning',
+            okLabel: 'Delete',
+            cancelLabel: 'Cancel'
+          }).then((confirmed) => {
+            if (confirmed) {
+              deletePrompt(target.id);
+              setSelectedIndex((prev) => Math.max(0, prev - 1));
+              
+              sendNotification({ 
+                title: "Deleted",
+                body: `Removed prompt: "${target.title}"` 
+              });
+            }
+          });
         }
         return;
       }
 
-      // ▼ Cmd+K (または Ctrl+K) でショートカット設定モードへ
+      // ▼ Cmd+K: キー設定
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        const targetPrompt = filteredPrompts[selectedIndex];
-        if (targetPrompt) {
-          setEditingId(targetPrompt.id);
-        }
+        const target = currentList[selectedIndex]; // ★ currentList を使用
+        if (target) setEditingId(target.id);
         return;
       }
 
+      // 矢印キーなど
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex(prev => {
-          const next = Math.min(prev + 1, filteredPrompts.length - 1);
+          const next = Math.min(prev + 1, currentList.length - 1); // ★ currentList を使用
           itemRefs.current[next]?.scrollIntoView({ block: "nearest" });
           return next;
         });
@@ -76,16 +145,21 @@ function App() {
           return next;
         });
       } else if (e.key === "Enter") {
-        if (filteredPrompts[selectedIndex]) {
-          handleSelect(filteredPrompts[selectedIndex]);
-        }
+        if (e.isComposing) return;
+        e.preventDefault();
+        // ★ currentList を使用
+        if (currentList[selectedIndex]) handleSelect(currentList[selectedIndex]);
       } else if (e.key === "Escape") {
-        getCurrentWebviewWindow().hide();
+        if (query.length > 0) setQuery("");
+        else getCurrentWebviewWindow().hide();
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIndex, editingId, filteredPrompts]);
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    
+  // Refを使うので filteredPrompts は依存配列から外しても動きますが、念のため入れておいても害はありません
+  }, [deletePrompt, query, selectedIndex, isModalOpen, editingId]); // filteredPrompts削除
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#191919] text-white overflow-hidden border border-[#333]">
@@ -114,7 +188,7 @@ function App() {
                   setEditingId={setEditingId}
                   onSelect={() => handleSelect(prompt)}
                   onHover={() => setSelectedIndex(index)}
-                  onShortcutUpdate={updatePromptShortcut}
+                  onShortcutUpdate={(id, key) => updatePromptField(id, "shortcut", key)}
                   innerRef={(el) => { itemRefs.current[index] = el; }}
                 />
               ))}
@@ -124,6 +198,20 @@ function App() {
         </Droppable>
       </DragDropContext>
       
+      <PromptModal 
+        isOpen={isModalOpen}
+        mode={modalMode}
+        initialData={modalData}
+        onClose={() => setIsModalOpen(false)}
+        onSave={(data) => {
+          if (modalMode === "create") {
+            addPrompt(data);
+          } else {
+            updatePrompt(data as Prompt);
+          }
+        }}
+      />
+
       <Footer />
     </div>
   );

@@ -7,7 +7,8 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     title: "Chain of Thought",
     desc: "Solve step-by-step logic.",
     content: "You are an expert in logical reasoning.\n\n# INSTRUCTION\nSolve the following problem step-by-step. Do not jump to the conclusion. Explicitly state the rationale for each step.\n\n# PROBLEM\n{{selection}}\n\n# OUTPUT\nLet's think step by step:",
-    shortcut: "" 
+    shortcut: "",
+    referenceUrl: "https://arxiv.org/abs/2201.11903"
   },
   {
     id: "review",
@@ -15,7 +16,8 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     title: "Senior Engineer Review",
     desc: "Security & Performance fix.",
     content: "Act as a Principal Software Engineer.\n\n# INSTRUCTION\nReview the code below. Focus strictly on:\n1. **Security** (Vulnerabilities)\n2. **Performance** (Time/Space complexity)\n3. **Maintainability** (SOLID, DRY)\n\n# CODE\n```\n{{selection}}\n```",
-    shortcut: ""
+    shortcut: "",
+    referenceUrl: "https://google.github.io/eng-practices/review/reviewer/" // ★Googleのコードレビューガイド
   },
   {
     id: "explain",

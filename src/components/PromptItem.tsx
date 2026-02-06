@@ -20,7 +20,7 @@ type Props = {
 // キーイベントをTauriのショートカット文字列に変換する関数
 const getShortcutFromEvent = (e: React.KeyboardEvent): string | null => {
     const modifiers = [];
-    if (e.metaKey) modifiers.push("CommandOrControl"); // MacのCommand
+    if (e.metaKey) modifiers.push("Command"); // MacのCommand
     if (e.ctrlKey) modifiers.push("Control");
     if (e.altKey) modifiers.push("Alt"); // MacのOption
     if (e.shiftKey) modifiers.push("Shift");

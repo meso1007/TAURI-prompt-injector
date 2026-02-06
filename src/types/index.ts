@@ -5,4 +5,5 @@ export type Prompt = {
     desc: string;
     content: string;
     shortcut?: string;
+    referenceUrl?: string;
   };

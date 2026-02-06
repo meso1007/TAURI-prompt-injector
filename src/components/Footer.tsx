@@ -1,13 +1,40 @@
 export const Footer = () => {
     return (
-      <div className="px-3 py-2 border-t border-[#333] bg-[#1e1e1e] flex justify-end gap-4 text-[10px] text-neutral-500 font-medium">
-        <div className="flex items-center gap-1">
-          <span className="bg-[#333] px-1.5 py-0.5 rounded text-neutral-300">↵</span>
-          <span>to copy</span>
+      <div className="h-8 border-t border-[#333] bg-[#222] flex items-center justify-between px-3 text-[10px] text-neutral-500 select-none font-medium">
+        {/* 左側：基本操作 */}
+        <div className="flex gap-4">
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">↑↓</span> 
+            <span>Nav</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">↵</span> 
+            <span>Copy</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">⌥Click</span> 
+            <span>Open Link</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="bg-[#333] px-1.5 py-0.5 rounded text-neutral-300">⌘K</span>
-          <span>to set key</span>
+  
+        {/* 右側：管理操作 */}
+        <div className="flex gap-4">
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">⌘N</span> 
+            <span>New</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">⌘E</span> 
+            <span>Edit</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">⌘K</span> 
+            <span>Set Key</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-sans text-neutral-400">⌘⌫</span> 
+            <span>Del</span>
+          </div>
         </div>
       </div>
     );
