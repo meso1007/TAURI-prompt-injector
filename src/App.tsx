@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 import { ask } from '@tauri-apps/plugin-dialog';
-// import { listen } from '@tauri-apps/api/event'; // ★削除: 使わなくなるので
 
 import { usePrompts } from "./hooks/usePrompts";
 import { useShortcuts } from "./hooks/useShortcuts";
@@ -46,9 +45,15 @@ function App() {
 
   const isDraggable = query === "" && !editingId && !isModalOpen;
 
+  // ★ New: Function to check for shortcut conflicts
+  const checkConflict = useCallback((shortcut: string, excludeId?: string) => {
+    if (!shortcut) return undefined;
+    return prompts.find(p => p.shortcut === shortcut && p.id !== excludeId);
+  }, [prompts]);
+
   const handleSelect = async (prompt: typeof prompts[0]) => {
     await executePrompt(prompt);
-    // 実行後は自動で隠す（これは便利なので残す）
+    // Hide window after execution
     await getCurrentWebviewWindow().hide(); 
     
     setTimeout(() => {
@@ -63,14 +68,7 @@ function App() {
     setSelectedIndex(result.destination.index);
   };
 
-  // ★★★ 修正箇所: Blur監視（自動で隠す機能）を完全に削除しました ★★★
-  // これにより、トレイアイコンやショートカット以外では閉じなくなります。
-  /* useEffect(() => {
-     ... (以前のリスナーコードは全部削除) ...
-  }, []);
-  */
-
-  // キーボード操作ロジック
+  // Keyboard navigation logic
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const currentList = filteredPromptsRef.current;
@@ -178,7 +176,6 @@ function App() {
         e.preventDefault();
         if (currentList[selectedIndex]) handleSelect(currentList[selectedIndex]);
       } 
-      // ▼ Escキーで閉じる機能は残す
       else if (e.key === "Escape") {
         if (query.length > 0) setQuery("");
         else getCurrentWebviewWindow().hide();
@@ -219,6 +216,7 @@ function App() {
                     onSelect={() => handleSelect(prompt)}
                     onHover={() => setSelectedIndex(index)}
                     onShortcutUpdate={(id, key) => updatePromptField(id, "shortcut", key)}
+                    checkConflict={checkConflict} // ★ Passed here
                     innerRef={(el) => { itemRefs.current[index] = el; }}
                   />
                 ))}
@@ -233,6 +231,7 @@ function App() {
           mode={modalMode}
           initialData={modalData}
           onClose={() => setIsModalOpen(false)}
+          checkConflict={checkConflict} // ★ Passed here
           onSave={(data) => {
             if (modalMode === "create") {
               addPrompt(data);
